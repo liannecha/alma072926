@@ -133,10 +133,11 @@ Authorization: Bearer change-me
 10. Click `Mark reached out`.
 11. Confirm the lead changes to `REACHED_OUT`.
 12. In the admin dashboard, click the resume filename to download the uploaded resume.
+13. Use the `Delete` action in the admin dashboard to remove a lead and its uploaded resume file.
 
 ## Tests
 
-The backend test suite covers the core lead workflow: public lead creation with a resume upload, invalid resume rejection, internal auth enforcement, authenticated lead listing, and status transition from `PENDING` to `REACHED_OUT`.
+The backend test suite covers the core lead workflow: public lead creation with a resume upload, invalid resume rejection, internal auth enforcement, authenticated lead listing, status transition from `PENDING` to `REACHED_OUT`, and authenticated lead deletion.
 
 From `apps/api`:
 
@@ -147,7 +148,7 @@ pytest
 Expected result:
 
 ```text
-5 passed
+8 passed
 ```
 
 ## Design Notes

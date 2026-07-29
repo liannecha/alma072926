@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core import config as config_module
 from app.core import database as database_module
-from app.models.lead import LeadStatus
+from app.models.lead import Lead, LeadStatus
 
 
 class DummyEmailService:
@@ -132,3 +132,46 @@ def test_internal_status_update_changes_pending_lead_to_reached_out_and_sets_tim
     assert payload["reached_out_at"] is not None
     parsed = datetime.fromisoformat(payload["reached_out_at"])
     assert parsed.tzinfo is not None
+
+
+def test_internal_delete_requires_auth(client: TestClient) -> None:
+    created = _create_lead(client, email="delete-auth@example.com")
+
+    response = client.delete(f"/api/leads/{created['id']}")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing authorization credentials"
+
+
+def test_internal_delete_removes_lead_and_resume_file(client: TestClient) -> None:
+    created = _create_lead(client, email="delete@example.com")
+
+    db = database_module.SessionLocal()
+    try:
+        lead = db.get(Lead, created["id"])
+        assert lead is not None
+        resume_path = Path(lead.resume_storage_path)
+        assert resume_path.exists()
+
+        response = client.delete(
+            f"/api/leads/{created['id']}",
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["detail"] == "Lead deleted"
+        db.expire_all()
+        assert db.get(Lead, created["id"]) is None
+        assert not resume_path.exists()
+    finally:
+        db.close()
+
+
+def test_internal_delete_missing_lead_returns_404(client: TestClient) -> None:
+    response = client.delete(
+        "/api/leads/999999",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Lead not found"

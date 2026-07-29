@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Lead, downloadLeadResume, listLeads, markLeadReachedOut } from '../../lib/api';
+import { Lead, deleteLead, downloadLeadResume, listLeads, markLeadReachedOut } from '../../lib/api';
 
 const STORAGE_KEY = 'alma-internal-token';
 
@@ -79,6 +79,24 @@ export default function AdminPage() {
       await downloadLeadResume(lead.id, savedToken, lead.resume_original_filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to download resume');
+    }
+  };
+
+  const handleDeleteLead = async (lead: Lead) => {
+    if (!savedToken) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${lead.first_name} ${lead.last_name}'s lead profile?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteLead(lead.id, savedToken);
+      setLeads((current) => current.filter((item) => item.id !== lead.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete lead');
     }
   };
 
@@ -192,15 +210,20 @@ export default function AdminPage() {
                           <td>{new Date(lead.created_at).toLocaleDateString()}</td>
                           <td>{lead.reached_out_at ? new Date(lead.reached_out_at).toLocaleDateString() : '—'}</td>
                           <td>
-                            {lead.status === 'PENDING' ? (
-                              <button className="secondary-button" onClick={() => handleMarkReachedOut(lead.id)}>
-                                Mark reached out
+                            <div className="token-box" style={{ gap: '0.5rem', justifyContent: 'flex-start' }}>
+                              {lead.status === 'PENDING' ? (
+                                <button className="secondary-button" onClick={() => handleMarkReachedOut(lead.id)}>
+                                  Mark reached out
+                                </button>
+                              ) : (
+                                <button className="ghost-button" disabled>
+                                  Reached out
+                                </button>
+                              )}
+                              <button className="ghost-button" onClick={() => handleDeleteLead(lead)}>
+                                Delete
                               </button>
-                            ) : (
-                              <button className="ghost-button" disabled>
-                                Reached out
-                              </button>
-                            )}
+                            </div>
                           </td>
                         </tr>
                       ))}

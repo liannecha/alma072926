@@ -89,3 +89,18 @@ export async function downloadLeadResume(id: number, token: string, filename: st
   anchor.remove();
   window.URL.revokeObjectURL(downloadUrl);
 }
+
+export async function deleteLead(id: number, token: string) {
+  const response = await fetch(`${API_BASE_URL}/api/leads/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Unable to delete lead'));
+  }
+
+  return response.json() as Promise<{ detail: string }>;
+}

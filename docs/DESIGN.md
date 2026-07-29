@@ -20,6 +20,7 @@ The prompt asks for an application that can create, get, and update leads. In th
 - `GET /api/leads` returns submitted leads for authenticated internal users.
 - `PATCH /api/leads/{lead_id}/status` updates a lead status for authenticated internal users.
 - `GET /api/leads/{lead_id}/resume` downloads a lead's stored resume for authenticated internal users.
+- `DELETE /api/leads/{lead_id}` removes a lead and its stored resume file for authenticated internal users.
 
 The required lead fields are first name, last name, email, and resume/CV. Each lead also has a status that starts as `PENDING` and can transition to `REACHED_OUT` only through a manual internal action.
 
@@ -101,6 +102,10 @@ Authenticated internal endpoint. It accepts:
 
 The endpoint finds the lead, returns `404` if missing, and transitions `PENDING` leads to `REACHED_OUT`. If the lead is already `REACHED_OUT`, the endpoint treats the request as idempotent success.
 
+### `DELETE /api/leads/{lead_id}`
+
+Authenticated internal endpoint. It deletes the lead database row and removes the associated local resume file if it still exists. Missing leads return `404`.
+
 ## State Workflow
 
 The lead workflow is deliberately small:
@@ -115,7 +120,7 @@ The status update schema requires clients to explicitly send a status field. Emp
 
 ## Persistence and File Storage
 
-SQLite is used for local persistence because it is durable, simple to run, and requires no external service. This is makes local review straightforward and is a practical choice given the assignment's timeframe.
+SQLite is used for local persistence because it is durable, simple to run, and requires no external service. This makes local review straightforward and is a practical choice given the assignment's timeframe.
 
 Resume/CV files are stored on the local filesystem under the configured `RESUME_STORAGE_DIR`. The storage service:
 
@@ -129,7 +134,7 @@ Production changes:
 
 - Replace SQLite with Postgres.
 - Replace local file storage with S3, GCS, or similar object storage.
-- Serve resumes through signed URLs or an authenticated download endpoint.
+- Serve resumes through signed URLs or object-storage-backed authenticated downloads.
 - Add migrations with Alembic.
 
 ## Email Design
@@ -188,6 +193,7 @@ Internal dashboard decisions:
 - `PENDING` and `REACHED_OUT` are displayed as badges.
 - The action button says `Mark reached out` to distinguish manual attorney outreach from automatic submission emails.
 - Resume filenames in the dashboard are clickable and trigger an authenticated download for the internal user.
+- Each lead row also includes a `Delete` action that removes the lead and its uploaded resume file after confirmation.
 
 ## Validation and Error Handling
 
@@ -214,6 +220,7 @@ The backend includes focused pytest coverage for the core workflow:
 - internal lead list requires auth
 - internal lead list succeeds with auth
 - internal status update changes `PENDING` to `REACHED_OUT` and sets `reached_out_at`
+- internal lead delete requires auth, removes the database row and resume file, and returns `404` for missing leads
 
 Tests use temporary SQLite databases and temporary resume storage directories so they do not mutate local development data.
 
@@ -226,7 +233,7 @@ Intentional tradeoffs for the take-home:
 - console email instead of real email delivery
 - bearer-token internal auth instead of SSO/OIDC
 - no pagination/filtering on the internal lead list
-- no resume download endpoint yet
+- no advanced resume preview, virus scanning, or object-storage-backed download flow
 - no Alembic migrations
 
 These choices keep the implementation small, easy to run, and complete end to end. The code is structured so the higher-fidelity production pieces can be swapped in behind existing boundaries.

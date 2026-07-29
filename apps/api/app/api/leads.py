@@ -50,6 +50,30 @@ def download_lead_resume(
     )
 
 
+@router.delete("/leads/{lead_id}")
+def delete_lead(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_internal_auth),
+) -> dict[str, str]:
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if lead.resume_storage_path:
+        try:
+            stored_path = Path(lead.resume_storage_path)
+            resume_path = stored_path if stored_path.is_absolute() else (Path.cwd() / stored_path).resolve()
+            if resume_path.exists() and resume_path.is_file():
+                resume_path.unlink()
+        except OSError:
+            pass
+
+    db.delete(lead)
+    db.commit()
+    return {"detail": "Lead deleted"}
+
+
 @router.patch("/leads/{lead_id}/status", response_model=LeadRead)
 def update_lead_status(
     lead_id: int,
