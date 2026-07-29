@@ -8,7 +8,7 @@ The core workflow is intentionally narrow:
 
 1. A prospect submits first name, last name, email, and resume/CV.
 2. The backend persists the lead and uploaded resume metadata.
-3. The backend sends local console email notifications to the prospect and internal team.
+3. The backend sends a confirmation to the prospect and a notification to the attorney/internal recipient.
 4. An internal user views submitted leads in an authenticated dashboard.
 5. After manual outreach, the internal user marks the lead as `REACHED_OUT`.
 
@@ -21,8 +21,9 @@ The prompt asks for an application that can create, get, and update leads. In th
 - `PATCH /api/leads/{lead_id}/status` updates a lead status for authenticated internal users.
 - `GET /api/leads/{lead_id}/resume` downloads a lead's stored resume for authenticated internal users.
 - `DELETE /api/leads/{lead_id}` removes a lead and its stored resume file for authenticated internal users.
+- `POST /api/leads/{lead_id}/send-email` sends a manual follow-up email to an authenticated lead.
 
-The required lead fields are first name, last name, email, and resume/CV. Each lead also has a status that starts as `PENDING` and can transition to `REACHED_OUT` only through a manual internal action.
+The required lead fields are first name, last name, email, and resume/CV. Each lead starts as `PENDING` and can move between `PENDING` and `REACHED_OUT` through manual internal actions.
 
 ## Architecture
 
@@ -34,10 +35,10 @@ Next.js frontend
 FastAPI backend
   ├─ request validation
   ├─ lead APIs
-  ├─ Google ID token and local bearer-token internal auth
+  ├─ Google ID token internal auth
   ├─ SQLite persistence
   ├─ local resume storage
-  └─ console email provider
+  └─ email provider abstraction with console and Resend providers
 ```
 
 The repository is organized as a small monorepo:
@@ -84,7 +85,7 @@ Public endpoint for prospect submissions. It accepts `multipart/form-data`:
 - `email`
 - `resume`
 
-The endpoint validates form fields, saves the resume, persists the lead, sends console email notifications, and returns the created lead. The created lead starts as `PENDING`.
+The endpoint validates form fields, saves the resume, persists the lead, sends a confirmation to the prospect and a notification to the configured attorney recipient, and returns the created lead. The created lead starts as `PENDING`.
 
 ### `GET /api/leads`
 
@@ -100,21 +101,25 @@ Authenticated internal endpoint. It accepts:
 {"status":"REACHED_OUT"}
 ```
 
-The endpoint finds the lead, returns `404` if missing, and transitions `PENDING` leads to `REACHED_OUT`. If the lead is already `REACHED_OUT`, the endpoint treats the request as idempotent success.
+The endpoint finds the lead, returns `404` if missing, and supports both status transitions. Moving to `REACHED_OUT` records `reached_out_at`; moving back to `PENDING` clears it. Repeating either status update is idempotent.
 
 ### `DELETE /api/leads/{lead_id}`
 
 Authenticated internal endpoint. It deletes the lead database row and removes the associated local resume file if it still exists. Missing leads return `404`.
+
+### `POST /api/leads/{lead_id}/send-email`
+
+Authenticated internal endpoint. It sends a simple Alma follow-up message to the lead's email address. Missing leads return `404`; sending this email does not change the lead status.
 
 ## State Workflow
 
 The lead workflow is deliberately small:
 
 ```text
-PENDING -> REACHED_OUT
+PENDING <-> REACHED_OUT
 ```
 
-New leads start as `PENDING` by default. Automatic submission emails do not change the lead status. A lead becomes `REACHED_OUT` only when an authenticated internal user manually clicks `Mark reached out` after actual follow-up.
+New leads start as `PENDING` by default. Automatic submission emails do not change the lead status. Internal users can manually mark a lead `REACHED_OUT` after follow-up or move it back to `PENDING` after confirmation.
 
 The status update schema requires clients to explicitly send a status field. Empty request bodies are rejected so state-changing requests must be intentional.
 
@@ -139,18 +144,19 @@ Production changes:
 
 ## Email Design
 
-The application has an email service abstraction with a local console provider. On lead creation, the backend sends:
+The application has an email service abstraction with a local console provider plus SMTP and Resend providers for real delivery. On lead creation, the backend sends:
 
 - a confirmation email to the prospect
 - a notification email to the internal team
 
-In local development, messages are printed to the FastAPI terminal. This keeps the app runnable without API keys or sender/domain verification.
+The internal recipient is configurable with `INTERNAL_NOTIFICATION_EMAIL` and defaults to `lianne.cha@gmail.com`. The internal dashboard also exposes a manual `Send email` action for individual follow-up messages.
 
-Email sending happens after the lead is saved. If local email sending fails, the lead is not lost; the error is logged and the API still returns the saved lead. In production, email delivery should move to an asynchronous job with retries.
+In local development, messages are printed to the FastAPI terminal by default. When `EMAIL_PROVIDER=smtp`, the backend sends through an SMTP server such as Gmail's `smtp.gmail.com` using a local app password. When `EMAIL_PROVIDER=resend`, the backend posts to Resend's email API using `RESEND_API_KEY`; `EMAIL_FROM` must be a verified sender.
+
+Email sending happens after the lead is saved. Prospect and attorney messages are attempted independently, so a failure in one does not prevent the other from being attempted. If email sending fails, the lead is not lost; the error is logged and the API still returns the saved lead. The local console provider prints messages unless a real provider is configured. In production, email delivery should move to an asynchronous job with retries.
 
 Production changes:
 
-- Add a provider such as Resend, SendGrid, SES, or SMTP.
 - Move email sending to a background queue.
 - Track notification delivery status if the product needs it.
 
@@ -175,14 +181,6 @@ Local Google OAuth configuration is intentionally env-driven:
 - `apps/api/.env` holds the matching `GOOGLE_CLIENT_ID` plus `INTERNAL_ALLOWED_EMAILS` or `INTERNAL_ALLOWED_EMAIL_DOMAIN`.
 - The Google OAuth client must allow `http://localhost:3000` as a JavaScript origin and `http://localhost:3000/api/auth/callback/google` as a redirect URI.
 - Real OAuth credentials are not tracked in Git; reviewers should create their own client or receive credentials out-of-band.
-
-The existing static internal token remains available as a local fallback:
-
-```text
-Authorization: Bearer <INTERNAL_AUTH_TOKEN>
-```
-
-This fallback keeps the take-home easy to review without forcing each reviewer to configure Google OAuth credentials. The public lead submission endpoint does not use either internal auth mechanism.
 
 Production changes:
 
@@ -209,13 +207,13 @@ Public form decisions:
 Internal dashboard decisions:
 
 - Google OAuth is the primary dashboard sign-in flow when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured.
-- If Google OAuth is not configured, the dashboard exposes a small local token fallback and stores that fallback token in `localStorage` for the take-home.
-- The frontend exposes `/api/auth/google-enabled` so the admin page can decide whether to show Google sign-in or the local fallback.
+- The frontend exposes `/api/auth/google-enabled` so the admin page can confirm Google sign-in is configured.
 - Leads are shown with counts for total, pending, and reached out.
 - `PENDING` and `REACHED_OUT` are displayed as badges.
 - The action button says `Mark reached out` to distinguish manual attorney outreach from automatic submission emails.
 - Resume filenames in the dashboard are clickable and trigger an authenticated download for the internal user.
 - Each lead row also includes a `Delete` action that removes the lead and its uploaded resume file after confirmation.
+- Each lead row includes a `Send email` action for manual follow-up; this does not mark the lead as `REACHED_OUT`.
 
 ## Validation and Error Handling
 
@@ -224,7 +222,7 @@ Validation is split by responsibility:
 - Pydantic validates first name, last name, email, and status update payloads.
 - FastAPI validates required form/file fields.
 - The resume storage service validates file type, filename, and file size.
-- Internal routes validate either a verified Google ID token or the local bearer-token fallback.
+- Internal routes validate a verified Google ID token for dashboard access.
 
 Expected error responses:
 
@@ -246,7 +244,9 @@ The backend includes focused pytest coverage for the core workflow:
 - internal lead list accepts a verified and allowed Google identity
 - internal lead list rejects invalid Google ID tokens
 - internal lead list rejects a verified but unallowed Google identity
-- internal status update changes `PENDING` to `REACHED_OUT` and sets `reached_out_at`
+- internal status update moves `PENDING` to `REACHED_OUT`, and can move it back to `PENDING` while clearing `reached_out_at`
+- lead creation sends prospect and internal emails and preserves the lead if email sending fails
+- authenticated follow-up email sends to the lead, rejects missing auth, returns `404` for a missing lead, and preserves `PENDING` status
 - internal lead delete requires auth, removes the database row and resume file, and returns `404` for missing leads
 
 Tests use temporary SQLite databases and temporary resume storage directories so they do not mutate local development data.
@@ -257,7 +257,7 @@ Intentional tradeoffs for the take-home:
 
 - SQLite instead of Postgres
 - local filesystem storage instead of object storage
-- console email instead of real email delivery
+- synchronous email sending instead of queued delivery tracking
 - env-var email/domain allowlists instead of organization groups or roles
 - no pagination/filtering on the internal lead list
 - no advanced resume preview, virus scanning, or object-storage-backed download flow

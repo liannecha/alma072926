@@ -48,9 +48,14 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     internal_allowed_emails: str = ""
     internal_allowed_email_domain: str = ""
-    internal_notification_email: str = "ops@example.com"
+    internal_notification_email: str = "lianne.cha@gmail.com"
     email_provider: str = "console"
     email_from: str = "no-reply@example.com"
+    resend_api_key: str = ""
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[2] / ".env",

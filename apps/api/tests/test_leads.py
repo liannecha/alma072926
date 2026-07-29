@@ -19,6 +19,25 @@ class DummyEmailService:
     def send_internal_notification(self, **kwargs: Any) -> None:
         return None
 
+    def send_follow_up(self, **kwargs: Any) -> None:
+        return None
+
+
+class RecordingEmailService(DummyEmailService):
+    def __init__(self) -> None:
+        self.prospect_calls: list[dict[str, Any]] = []
+        self.internal_calls: list[dict[str, Any]] = []
+        self.follow_up_calls: list[dict[str, Any]] = []
+
+    def send_prospect_confirmation(self, **kwargs: Any) -> None:
+        self.prospect_calls.append(kwargs)
+
+    def send_internal_notification(self, **kwargs: Any) -> None:
+        self.internal_calls.append(kwargs)
+
+    def send_follow_up(self, **kwargs: Any) -> None:
+        self.follow_up_calls.append(kwargs)
+
 
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
@@ -32,6 +51,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     config_module.settings.google_client_id = ""
     config_module.settings.internal_allowed_emails = ""
     config_module.settings.internal_allowed_email_domain = ""
+    config_module.settings.internal_notification_email = "lianne.cha@gmail.com"
 
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -83,6 +103,45 @@ def test_public_lead_creation_succeeds_with_pdf_upload_and_returns_pending(clien
     assert response["status"] == LeadStatus.PENDING.value
     assert response["resume_original_filename"] == "resume.pdf"
     assert response["email"] == "public@example.com"
+
+
+def test_lead_creation_sends_prospect_and_internal_emails_with_submission_time(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.api.leads as leads_module
+
+    email_service = RecordingEmailService()
+    monkeypatch.setattr(leads_module, "get_email_service", lambda: email_service)
+
+    response = _create_lead(client, email="prospect@example.com")
+
+    assert len(email_service.prospect_calls) == 1
+    assert email_service.prospect_calls[0]["email"] == "prospect@example.com"
+    assert len(email_service.internal_calls) == 1
+    assert email_service.internal_calls[0]["email"] == "prospect@example.com"
+    assert email_service.internal_calls[0]["submitted_at"] is not None
+    assert config_module.settings.internal_notification_email == "lianne.cha@gmail.com"
+
+
+def test_lead_creation_preserves_lead_when_email_sending_fails(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.api.leads as leads_module
+
+    class FailingEmailService(DummyEmailService):
+        def send_prospect_confirmation(self, **kwargs: Any) -> None:
+            raise RuntimeError("email provider unavailable")
+
+        def send_internal_notification(self, **kwargs: Any) -> None:
+            raise RuntimeError("email provider unavailable")
+
+    monkeypatch.setattr(leads_module, "get_email_service", lambda: FailingEmailService())
+
+    response = _create_lead(client, email="email-failure@example.com")
+
+    assert response["email"] == "email-failure@example.com"
 
 
 def test_invalid_resume_content_type_is_rejected(client: TestClient) -> None:
@@ -221,6 +280,71 @@ def test_internal_status_update_changes_pending_lead_to_reached_out_and_sets_tim
     assert payload["reached_out_at"] is not None
     parsed = datetime.fromisoformat(payload["reached_out_at"])
     assert parsed.tzinfo is not None
+
+
+def test_internal_status_update_can_move_reached_out_lead_back_to_pending(client: TestClient) -> None:
+    created = _create_lead(client, email="status-revert@example.com")
+    headers = {"Authorization": "Bearer test-token"}
+
+    reached_response = client.patch(
+        f"/api/leads/{created['id']}/status",
+        headers=headers,
+        json={"status": LeadStatus.REACHED_OUT.value},
+    )
+    assert reached_response.status_code == 200
+
+    pending_response = client.patch(
+        f"/api/leads/{created['id']}/status",
+        headers=headers,
+        json={"status": LeadStatus.PENDING.value},
+    )
+
+    assert pending_response.status_code == 200
+    payload = pending_response.json()
+    assert payload["status"] == LeadStatus.PENDING.value
+    assert payload["reached_out_at"] is None
+
+
+def test_send_email_requires_auth(client: TestClient) -> None:
+    created = _create_lead(client, email="send-auth@example.com")
+
+    response = client.post(f"/api/leads/{created['id']}/send-email")
+
+    assert response.status_code == 401
+
+
+def test_send_email_returns_404_for_missing_lead(client: TestClient) -> None:
+    response = client.post(
+        "/api/leads/999999/send-email",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Lead not found"
+
+
+def test_send_email_sends_to_lead_without_changing_status(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.api.leads as leads_module
+
+    email_service = RecordingEmailService()
+    monkeypatch.setattr(leads_module, "get_email_service", lambda: email_service)
+    created = _create_lead(client, email="follow-up@example.com")
+
+    response = client.post(
+        f"/api/leads/{created['id']}/send-email",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detail"] == "Follow-up email sent"
+    assert email_service.follow_up_calls == [{"first_name": "Ada", "email": "follow-up@example.com"}]
+
+    leads = client.get("/api/leads", headers={"Authorization": "Bearer test-token"}).json()
+    sent_lead = next(item for item in leads if item["id"] == created["id"])
+    assert sent_lead["status"] == LeadStatus.PENDING.value
 
 
 def test_internal_delete_requires_auth(client: TestClient) -> None:

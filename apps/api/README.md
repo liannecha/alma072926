@@ -27,15 +27,36 @@ Resume uploads are stored locally under RESUME_STORAGE_DIR during development. T
 
 ## Email
 
-Local email delivery uses the console provider. Messages are printed to the terminal so the backend can be exercised locally without configuring a real mail provider.
+Local email delivery uses the console provider by default. Messages are printed to the terminal so the backend can be exercised locally without configuring a real mail provider.
 
-Real email delivery is intentionally deferred as an optional enhancement. The provider abstraction allows a production service like Resend, SendGrid, or SES to be added later through environment configuration without changing lead submission logic.
+To send real emails with Gmail SMTP, set these values in `apps/api/.env` and restart the backend:
+
+```text
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=lianne.cha@gmail.com
+SMTP_PASSWORD=<gmail-app-password>
+EMAIL_FROM=Alma <lianne.cha@gmail.com>
+INTERNAL_NOTIFICATION_EMAIL=lianne.cha@gmail.com
+```
+
+`SMTP_PASSWORD` must be a Gmail App Password, not the normal Google password.
+
+Resend is also supported if you have a verified sending domain:
+
+```text
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=<your-resend-api-key>
+EMAIL_FROM=Alma <onboarding@your-verified-domain.com>
+INTERNAL_NOTIFICATION_EMAIL=lianne.cha@gmail.com
+```
+
+`EMAIL_FROM` must be a verified sender in Resend.
 
 ## Internal auth
 
-Internal endpoints will require an Authorization header in the form `Bearer <INTERNAL_AUTH_TOKEN>`. The public lead submission endpoint remains open and does not require authentication.
-
-Real authentication is intentionally deferred as an optional enhancement. The bearer-token dependency keeps local setup simple for reviewers, while a production application would use SSO/OAuth/OIDC through a provider such as Auth0, Clerk, WorkOS, Google Workspace, or Microsoft Entra ID.
+Internal endpoints require an Authorization header containing a verified Google ID token. The public lead submission endpoint remains open and does not require authentication.
 
 ## Health check
 

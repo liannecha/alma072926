@@ -2,7 +2,7 @@
 
 import { signIn, signOut, useSession } from 'next-auth/react';
 import { useEffect, useMemo, useState } from 'react';
-import { Lead, deleteLead, downloadLeadResume, listLeads, markLeadReachedOut } from '../../lib/api';
+import { Lead, deleteLead, downloadLeadResume, listLeads, markLeadPending, markLeadReachedOut, sendLeadEmail } from '../../lib/api';
 
 const STORAGE_KEY = 'alma-internal-token';
 
@@ -13,6 +13,8 @@ export default function AdminPage() {
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState<boolean | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
+  const [emailFeedback, setEmailFeedback] = useState<{ leadId: number; message: string; kind: 'success' | 'error' } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const googleToken = session?.googleIdToken || '';
@@ -80,14 +82,23 @@ export default function AdminPage() {
     }
   };
 
-  const handleMarkReachedOut = async (leadId: number) => {
+  const handleStatusChange = async (lead: Lead) => {
     if (!activeToken) {
       return;
     }
 
+    if (lead.status === 'REACHED_OUT') {
+      const confirmed = window.confirm(`Are you sure you want to move ${lead.first_name} ${lead.last_name} back to pending?`);
+      if (!confirmed) {
+        return;
+      }
+    }
+
     try {
-      const updatedLead = await markLeadReachedOut(leadId, activeToken);
-      setLeads((current) => current.map((lead) => (lead.id === leadId ? updatedLead : lead)));
+      const updatedLead = lead.status === 'PENDING'
+        ? await markLeadReachedOut(lead.id, activeToken)
+        : await markLeadPending(lead.id, activeToken);
+      setLeads((current) => current.map((item) => (item.id === lead.id ? updatedLead : item)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update lead');
     }
@@ -102,6 +113,27 @@ export default function AdminPage() {
       await downloadLeadResume(lead.id, activeToken, lead.resume_original_filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to download resume');
+    }
+  };
+
+  const handleSendEmail = async (lead: Lead) => {
+    if (!activeToken || sendingEmailId !== null) {
+      return;
+    }
+
+    setSendingEmailId(lead.id);
+    setEmailFeedback(null);
+    try {
+      const result = await sendLeadEmail(lead.id, activeToken);
+      setEmailFeedback({ leadId: lead.id, message: result.detail, kind: 'success' });
+    } catch (err) {
+      setEmailFeedback({
+        leadId: lead.id,
+        message: err instanceof Error ? err.message : 'Unable to send email',
+        kind: 'error',
+      });
+    } finally {
+      setSendingEmailId(null);
     }
   };
 
@@ -242,26 +274,41 @@ export default function AdminPage() {
                             </button>
                           </td>
                           <td>
-                            {lead.status === 'PENDING' ? (
+                            <div className="status-actions">
+                              {lead.status === 'PENDING' ? (
+                                <button
+                                  type="button"
+                                  className="status-button status-button-pending"
+                                  onClick={() => void handleStatusChange(lead)}
+                                  aria-label={`Mark ${lead.first_name} ${lead.last_name} as reached out`}
+                                  title="Mark this lead as reached out"
+                                >
+                                  PENDING
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="status-button status-button-reached"
+                                  onClick={() => void handleStatusChange(lead)}
+                                  title="Move this lead back to pending"
+                                >
+                                  REACHED OUT
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                className="status-button status-button-pending"
-                                onClick={() => handleMarkReachedOut(lead.id)}
-                                aria-label={`Mark ${lead.first_name} ${lead.last_name} as reached out`}
-                                title="Mark this lead as reached out"
+                                className="send-email-button"
+                                onClick={() => void handleSendEmail(lead)}
+                                disabled={sendingEmailId === lead.id}
                               >
-                                PENDING
+                                {sendingEmailId === lead.id ? 'Sending…' : 'Send email'}
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="status-button status-button-reached"
-                                disabled
-                                title="Already reached out"
-                              >
-                                REACHED OUT
-                              </button>
-                            )}
+                              {emailFeedback?.leadId === lead.id ? (
+                                <span className={`email-feedback email-feedback-${emailFeedback.kind}`} role="status">
+                                  {emailFeedback.message}
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td>{new Date(lead.created_at).toLocaleDateString()}</td>
                           <td>{lead.reached_out_at ? new Date(lead.reached_out_at).toLocaleDateString() : '—'}</td>

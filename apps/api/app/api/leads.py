@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -14,6 +15,7 @@ from app.services.email import get_email_service
 from app.services.resume_storage import ResumeStorageError, save_resume_upload
 
 router = APIRouter(prefix="/api", tags=["leads"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/leads", response_model=list[LeadRead])
@@ -88,13 +90,38 @@ def update_lead_status(
     if payload.status == LeadStatus.REACHED_OUT and lead.status == LeadStatus.PENDING:
         lead.status = LeadStatus.REACHED_OUT
         lead.reached_out_at = datetime.now(timezone.utc)
+    elif payload.status == LeadStatus.PENDING and lead.status == LeadStatus.REACHED_OUT:
+        lead.status = LeadStatus.PENDING
+        lead.reached_out_at = None
     elif payload.status == LeadStatus.REACHED_OUT and lead.status == LeadStatus.REACHED_OUT:
         # Idempotent success for already-reached-out leads.
+        pass
+    elif payload.status == LeadStatus.PENDING and lead.status == LeadStatus.PENDING:
+        # Idempotent success for already-pending leads.
         pass
 
     db.commit()
     db.refresh(lead)
     return lead
+
+
+@router.post("/leads/{lead_id}/send-email")
+def send_lead_email(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_internal_auth),
+) -> dict[str, str]:
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        get_email_service().send_follow_up(first_name=lead.first_name, email=lead.email)
+    except Exception as exc:
+        logger.exception("Follow-up email failed for lead %s", lead_id)
+        raise HTTPException(status_code=500, detail="Unable to send follow-up email") from exc
+
+    return {"detail": "Follow-up email sent"}
 
 
 @router.post("/leads", response_model=LeadRead)
@@ -127,7 +154,12 @@ def create_lead(
     db.commit()
     db.refresh(lead)
 
-    email_service = get_email_service()
+    try:
+        email_service = get_email_service()
+    except Exception:
+        logger.exception("Email service initialization failed for lead %s", lead.id)
+        return lead
+
     try:
         email_service.send_prospect_confirmation(
             first_name=lead.first_name,
@@ -135,13 +167,18 @@ def create_lead(
             email=lead.email,
             resume_original_filename=lead.resume_original_filename,
         )
+    except Exception:
+        logger.exception("Prospect confirmation email failed for lead %s", lead.id)
+
+    try:
         email_service.send_internal_notification(
             first_name=lead.first_name,
             last_name=lead.last_name,
             email=lead.email,
             resume_original_filename=lead.resume_original_filename,
+            submitted_at=lead.created_at,
         )
-    except Exception as exc:  # pragma: no cover - local logging path
-        print(f"Email sending failed: {exc}")
+    except Exception:
+        logger.exception("Internal notification email failed for lead %s", lead.id)
 
     return lead

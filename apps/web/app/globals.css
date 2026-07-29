@@ -491,6 +491,47 @@ select {
   transform: translateY(-1px);
 }
 
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.send-email-button {
+  border: 1px solid var(--alma-green-800);
+  border-radius: 8px;
+  padding: 0.38rem 0.6rem;
+  background: transparent;
+  color: var(--alma-green-800);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.send-email-button:hover:not(:disabled) {
+  background: #edf7e7;
+}
+
+.send-email-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.email-feedback {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+}
+
+.email-feedback-success {
+  color: var(--alma-green-800);
+}
+
+.email-feedback-error {
+  color: var(--error);
+}
+
 .status-button:disabled {
   cursor: default;
   opacity: 1;

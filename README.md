@@ -7,9 +7,10 @@ A small full-stack lead intake application for the Alma take-home assignment.
 - Public lead submission form
 - Resume/CV upload
 - Lead persistence with SQLite
-- Console email notifications to the prospect and internal team
+- Email notifications to the prospect and internal team on submission
+- Manual follow-up email action from the internal dashboard
 - Internal dashboard with Google OAuth
-- Manual lead status transition from `PENDING` to `REACHED_OUT`
+- Manual lead status transition between `PENDING` and `REACHED_OUT`
 - Authenticated resume download for internal users
 
 ## Tech Stack
@@ -31,7 +32,9 @@ A small full-stack lead intake application for the Alma take-home assignment.
 - Node.js 18+
 - npm
 
-## Backend Setup
+## Run the App
+
+### 1. Start the Backend
 
 From the repository root:
 
@@ -54,7 +57,7 @@ Expected response:
 {"status":"ok"}
 ```
 
-## Frontend Setup
+### 2. Start the Frontend
 
 In a second terminal:
 
@@ -70,39 +73,19 @@ Open:
 http://localhost:3000
 ```
 
-If the API is running on a different port, set `NEXT_PUBLIC_API_BASE_URL` before starting the frontend.
-
-macOS/Linux:
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001 npm run dev
-```
-
-Windows PowerShell:
-
-```powershell
-$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8001"
-npm run dev
-```
-
-Or create `apps/web/.env.local`:
-
-```text
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
-```
-
-Then run:
-
-```bash
-npm run dev
-```
-
-## Internal Dashboard
+### 3. Open the Internal Dashboard
 
 Open:
 
 ```text
 http://localhost:3000/admin
+```
+
+The dashboard requires Google login. The currently verified internal emails are:
+
+```text
+lianne.cha@gmail.com
+shuo@tryalma.ai
 ```
 
 ### Google OAuth Setup
@@ -123,7 +106,7 @@ Create or update `apps/api/.env` with the same Google client ID and at least one
 
 ```text
 GOOGLE_CLIENT_ID=<provided-google-oauth-client-id>
-INTERNAL_ALLOWED_EMAILS=<your-google-email@example.com>
+INTERNAL_ALLOWED_EMAILS=lianne.cha@gmail.com,shuo@tryalma.ai
 INTERNAL_ALLOWED_EMAIL_DOMAIN=
 ```
 
@@ -151,22 +134,6 @@ Authorization: Bearer <google-id-token>
 
 The backend verifies the token signature and audience, requires `email_verified=true`, and allows only configured emails or the configured email domain.
 
-### Local Fallback
-
-If Google OAuth env vars are missing, `/admin` shows a local token fallback for reviewers. Default local token:
-
-```text
-change-me
-```
-
-This comes from `INTERNAL_AUTH_TOKEN` in `apps/api/.env.example`.
-
-Fallback internal API requests use:
-
-```text
-Authorization: Bearer change-me
-```
-
 ## End-to-End Workflow
 
 1. Start the backend.
@@ -174,18 +141,19 @@ Authorization: Bearer change-me
 3. Open `http://localhost:3000`.
 4. Submit first name, last name, email, and a PDF/DOC/DOCX resume.
 5. Confirm a success message appears.
-6. Confirm the backend terminal prints two console emails.
+6. Confirm the backend terminal prints a confirmation email to the prospect and a notification email to `lianne.cha@gmail.com`.
 7. Open `http://localhost:3000/admin`.
-8. Sign in with Google, or use the local token fallback if Google OAuth is not configured.
+8. Sign in with one of the verified Google accounts.
 9. Confirm the lead appears as `PENDING`.
 10. Click `Mark reached out`.
 11. Confirm the lead changes to `REACHED_OUT`.
 12. In the admin dashboard, click the resume filename to download the uploaded resume.
 13. Use the `Delete` action in the admin dashboard to remove a lead and its uploaded resume file.
+14. Use `Send email` on a lead to send a follow-up message without changing its status.
 
 ## Tests
 
-The backend test suite covers the core lead workflow: public lead creation with a resume upload, invalid resume rejection, internal auth enforcement, authenticated lead listing, Google ID token authorization behavior, status transition from `PENDING` to `REACHED_OUT`, and authenticated lead deletion.
+The backend test suite covers the core lead workflow, including submission emails, the default attorney recipient, internal auth enforcement, authenticated follow-up email sending, status preservation, and authenticated lead deletion.
 
 From `apps/api`:
 
@@ -196,7 +164,7 @@ pytest
 Expected result:
 
 ```text
-12 passed
+21 passed
 ```
 
 ## Design Notes
@@ -210,5 +178,32 @@ For Alma-inspired visual direction, see `docs/ALMA_STYLE_GUIDE.md`.
 - SQLite database files are ignored by Git.
 - Uploaded resumes are stored locally and ignored by Git.
 - OAuth credentials live only in local `.env` files and should be shared out-of-band if a reviewer needs the exact same Google client.
-- Email delivery uses a console provider for local development.
+- Email delivery defaults to a console provider for local development.
+- Lead creation emails the prospect and the configurable internal recipient, which defaults to `lianne.cha@gmail.com`. The dashboard's `Send email` action sends a manual follow-up to the selected lead.
+- Configure `INTERNAL_NOTIFICATION_EMAIL` in `apps/api/.env` to change the attorney recipient. Keep provider credentials in local environment variables; the default console provider requires none.
 - Production would use Postgres, object storage, real email delivery, and organization-managed SSO/groups/roles.
+
+## Real Email Delivery
+
+By default, emails are printed in the FastAPI terminal. To send real emails without a custom domain, configure Gmail SMTP in `apps/api/.env`:
+
+```text
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=lianne.cha@gmail.com
+SMTP_PASSWORD=<gmail-app-password>
+EMAIL_FROM=Alma <lianne.cha@gmail.com>
+INTERNAL_NOTIFICATION_EMAIL=lianne.cha@gmail.com
+```
+
+`SMTP_PASSWORD` must be a Gmail App Password, not the normal Google account password. The Gmail account must have 2-Step Verification enabled before Google will let you create an app password. After updating `.env`, restart the backend. New lead submissions will send a real email to the prospect and a real attorney notification to `INTERNAL_NOTIFICATION_EMAIL`; the dashboard's `Send email` button will send a real follow-up email to that lead.
+
+Resend is also supported if you have a verified sending domain:
+
+```text
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=<your-resend-api-key>
+EMAIL_FROM=Alma <onboarding@your-verified-domain.com>
+INTERNAL_NOTIFICATION_EMAIL=lianne.cha@gmail.com
+```

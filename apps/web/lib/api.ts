@@ -52,13 +52,21 @@ export async function listLeads(token: string) {
 }
 
 export async function markLeadReachedOut(id: number, token: string) {
+  return updateLeadStatus(id, 'REACHED_OUT', token);
+}
+
+export async function markLeadPending(id: number, token: string) {
+  return updateLeadStatus(id, 'PENDING', token);
+}
+
+async function updateLeadStatus(id: number, status: Lead['status'], token: string) {
   const response = await fetch(`${API_BASE_URL}/api/leads/${id}/status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ status: 'REACHED_OUT' }),
+    body: JSON.stringify({ status }),
   });
 
   if (!response.ok) {
@@ -100,6 +108,21 @@ export async function deleteLead(id: number, token: string) {
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response, 'Unable to delete lead'));
+  }
+
+  return response.json() as Promise<{ detail: string }>;
+}
+
+export async function sendLeadEmail(id: number, token: string) {
+  const response = await fetch(`${API_BASE_URL}/api/leads/${id}/send-email`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Unable to send email'));
   }
 
   return response.json() as Promise<{ detail: string }>;

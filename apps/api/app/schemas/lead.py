@@ -45,6 +45,4 @@ class LeadStatusUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, value: LeadStatus) -> LeadStatus:
-        if value != LeadStatus.REACHED_OUT:
-            raise ValueError("Only REACHED_OUT is supported for now")
         return value
