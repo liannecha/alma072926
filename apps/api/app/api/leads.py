@@ -34,10 +34,10 @@ def update_lead_status(
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    if lead.status == LeadStatus.PENDING:
+    if payload.status == LeadStatus.REACHED_OUT and lead.status == LeadStatus.PENDING:
         lead.status = LeadStatus.REACHED_OUT
         lead.reached_out_at = datetime.now(timezone.utc)
-    elif lead.status == LeadStatus.REACHED_OUT:
+    elif payload.status == LeadStatus.REACHED_OUT and lead.status == LeadStatus.REACHED_OUT:
         # Idempotent success for already-reached-out leads.
         pass
 

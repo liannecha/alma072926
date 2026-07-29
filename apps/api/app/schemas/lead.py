@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -28,6 +28,15 @@ class LeadRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     reached_out_at: datetime | None = None
+
+    @field_validator("created_at", "updated_at", "reached_out_at", mode="before")
+    @classmethod
+    def ensure_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class LeadStatusUpdate(BaseModel):

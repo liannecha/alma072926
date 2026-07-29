@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 
 from app.core.config import settings
 

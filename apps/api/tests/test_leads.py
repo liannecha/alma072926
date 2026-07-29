@@ -1,0 +1,134 @@
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core import config as config_module
+from app.core import database as database_module
+from app.models.lead import LeadStatus
+
+
+class DummyEmailService:
+    def send_prospect_confirmation(self, **kwargs: Any) -> None:
+        return None
+
+    def send_internal_notification(self, **kwargs: Any) -> None:
+        return None
+
+
+@pytest.fixture()
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    db_path = tmp_path / "test.db"
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
+    config_module.settings.database_url = f"sqlite:///{db_path}"
+    config_module.settings.resume_storage_dir = str(storage_dir)
+    config_module.settings.internal_auth_token = "test-token"
+
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    database_module.engine = engine
+    database_module.SessionLocal = SessionLocal
+    database_module.Base.metadata.create_all(bind=engine)
+
+    import importlib
+
+    import app.api.leads as leads_module
+    import app.api.routes as routes_module
+    import app.main as main_module
+
+    importlib.reload(leads_module)
+    importlib.reload(routes_module)
+    importlib.reload(main_module)
+
+    def override_get_db() -> Any:
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    main_module.app.dependency_overrides[leads_module.get_db] = override_get_db
+    monkeypatch.setattr(leads_module, "get_email_service", lambda: DummyEmailService())
+
+    with TestClient(main_module.app) as test_client:
+        yield test_client
+
+    main_module.app.dependency_overrides.clear()
+
+
+def _create_lead(client: TestClient, *, email: str = "lead@example.com") -> dict[str, Any]:
+    pdf_bytes = b"%PDF-1.4\n%test"
+    response = client.post(
+        "/api/leads",
+        data={"first_name": "Ada", "last_name": "Lovelace", "email": email},
+        files={"resume": ("resume.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_public_lead_creation_succeeds_with_pdf_upload_and_returns_pending(client: TestClient) -> None:
+    response = _create_lead(client, email="public@example.com")
+
+    assert response["status"] == LeadStatus.PENDING.value
+    assert response["resume_original_filename"] == "resume.pdf"
+    assert response["email"] == "public@example.com"
+
+
+def test_invalid_resume_content_type_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/api/leads",
+        data={"first_name": "Ada", "last_name": "Lovelace", "email": "bad@example.com"},
+        files={"resume": ("resume.txt", b"plain text", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported file type" in response.json()["detail"]
+
+
+def test_internal_lead_list_requires_auth(client: TestClient) -> None:
+    _create_lead(client)
+
+    response = client.get("/api/leads")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing authorization credentials"
+
+
+def test_internal_lead_list_succeeds_with_auth(client: TestClient) -> None:
+    created = _create_lead(client, email="staff@example.com")
+
+    response = client.get(
+        "/api/leads",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert isinstance(payload, list)
+    assert any(item["id"] == created["id"] for item in payload)
+
+
+def test_internal_status_update_changes_pending_lead_to_reached_out_and_sets_timestamp(client: TestClient) -> None:
+    created = _create_lead(client, email="status@example.com")
+
+    response = client.patch(
+        f"/api/leads/{created['id']}/status",
+        headers={"Authorization": "Bearer test-token"},
+        json={"status": LeadStatus.REACHED_OUT.value},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == LeadStatus.REACHED_OUT.value
+    assert payload["id"] == created["id"]
+    assert payload["reached_out_at"] is not None
+    parsed = datetime.fromisoformat(payload["reached_out_at"])
+    assert parsed.tzinfo is not None
