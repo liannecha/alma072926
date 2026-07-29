@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+alma_leads.db
+storage/resumes/*
+!storage/resumes/.gitkeep
