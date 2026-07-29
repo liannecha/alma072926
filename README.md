@@ -69,10 +69,31 @@ Open:
 http://localhost:3000
 ```
 
-If the API is running on a different port, start the frontend with:
+If the API is running on a different port, set `NEXT_PUBLIC_API_BASE_URL` before starting the frontend.
+
+macOS/Linux:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001 npm run dev
+```
+
+Windows PowerShell:
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8001"
+npm run dev
+```
+
+Or create `apps/web/.env.local`:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
+```
+
+Then run:
+
+```bash
+npm run dev
 ```
 
 ## Internal Dashboard
@@ -112,6 +133,8 @@ Authorization: Bearer change-me
 11. Confirm the lead changes to `REACHED_OUT`.
 
 ## Tests
+
+The backend test suite covers the core lead workflow: public lead creation with a resume upload, invalid resume rejection, internal auth enforcement, authenticated lead listing, and status transition from `PENDING` to `REACHED_OUT`.
 
 From `apps/api`:
 
