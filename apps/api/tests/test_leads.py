@@ -29,6 +29,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     config_module.settings.database_url = f"sqlite:///{db_path}"
     config_module.settings.resume_storage_dir = str(storage_dir)
     config_module.settings.internal_auth_token = "test-token"
+    config_module.settings.google_client_id = ""
+    config_module.settings.internal_allowed_emails = ""
+    config_module.settings.internal_allowed_email_domain = ""
 
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -102,6 +105,18 @@ def test_internal_lead_list_requires_auth(client: TestClient) -> None:
     assert response.json()["detail"] == "Invalid or missing authorization credentials"
 
 
+def test_internal_lead_list_rejects_invalid_bearer_token(client: TestClient) -> None:
+    _create_lead(client)
+
+    response = client.get(
+        "/api/leads",
+        headers={"Authorization": "Bearer not-the-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing authorization credentials"
+
+
 def test_internal_lead_list_succeeds_with_auth(client: TestClient) -> None:
     created = _create_lead(client, email="staff@example.com")
 
@@ -114,6 +129,80 @@ def test_internal_lead_list_succeeds_with_auth(client: TestClient) -> None:
     payload = response.json()
     assert isinstance(payload, list)
     assert any(item["id"] == created["id"] for item in payload)
+
+
+def test_internal_lead_list_accepts_allowed_google_id_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.core.security as security_module
+
+    created = _create_lead(client, email="google@example.com")
+    config_module.settings.google_client_id = "google-client-id"
+    config_module.settings.internal_allowed_emails = "staff@example.com"
+
+    monkeypatch.setattr(
+        security_module,
+        "verify_google_id_token",
+        lambda token: {"email": "staff@example.com", "email_verified": True},
+    )
+
+    response = client.get(
+        "/api/leads",
+        headers={"Authorization": "Bearer google-id-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["id"] == created["id"] for item in payload)
+
+
+def test_internal_lead_list_rejects_invalid_google_id_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.core.security as security_module
+
+    _create_lead(client, email="google-invalid@example.com")
+    config_module.settings.google_client_id = "google-client-id"
+    monkeypatch.setattr(
+        security_module,
+        "verify_google_id_token",
+        lambda token: (_ for _ in ()).throw(ValueError("invalid token")),
+    )
+
+    response = client.get(
+        "/api/leads",
+        headers={"Authorization": "Bearer google-id-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing authorization credentials"
+
+
+def test_internal_lead_list_rejects_unallowed_google_identity(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.core.security as security_module
+
+    _create_lead(client, email="google-denied@example.com")
+    config_module.settings.google_client_id = "google-client-id"
+    config_module.settings.internal_allowed_email_domain = "example.com"
+
+    monkeypatch.setattr(
+        security_module,
+        "verify_google_id_token",
+        lambda token: {"email": "outsider@other.com", "email_verified": True},
+    )
+
+    response = client.get(
+        "/api/leads",
+        headers={"Authorization": "Bearer google-id-token"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Google account is not allowed for internal access"
 
 
 def test_internal_status_update_changes_pending_lead_to_reached_out_and_sets_timestamp(client: TestClient) -> None:
