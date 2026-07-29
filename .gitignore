@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 .env
 .venv/
+node_modules/
+.next/
 alma_leads.db
 storage/resumes/*
 !storage/resumes/.gitkeep
