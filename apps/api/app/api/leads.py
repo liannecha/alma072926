@@ -1,14 +1,49 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.lead import Lead
-from app.schemas.lead import LeadCreate, LeadRead
+from app.core.security import require_internal_auth
+from app.models.lead import Lead, LeadStatus
+from app.schemas.lead import LeadCreate, LeadRead, LeadStatusUpdate
 from app.services.email import get_email_service
 from app.services.resume_storage import ResumeStorageError, save_resume_upload
 
 router = APIRouter(prefix="/api", tags=["leads"])
+
+
+@router.get("/leads", response_model=list[LeadRead])
+def list_leads(
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_internal_auth),
+) -> list[Lead]:
+    leads = db.query(Lead).order_by(Lead.created_at.desc()).all()
+    return leads
+
+
+@router.patch("/leads/{lead_id}/status", response_model=LeadRead)
+def update_lead_status(
+    lead_id: int,
+    payload: LeadStatusUpdate,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_internal_auth),
+) -> Lead:
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if lead.status == LeadStatus.PENDING:
+        lead.status = LeadStatus.REACHED_OUT
+        lead.reached_out_at = datetime.now(timezone.utc)
+    elif lead.status == LeadStatus.REACHED_OUT:
+        # Idempotent success for already-reached-out leads.
+        pass
+
+    db.commit()
+    db.refresh(lead)
+    return lead
 
 
 @router.post("/leads", response_model=LeadRead)
