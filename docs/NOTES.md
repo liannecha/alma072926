@@ -1,38 +1,15 @@
-# Coding Agent Usage Notes
+# Coding Agent Attribution
 
-This project was built with substantial coding-agent assistance. I used GitHub Copilot Chat in VS Code as the primary coding agent for scaffolding, implementation, and verification, and used Codex/ChatGPT for follow-up guidance, documentation, and review. I kept the product interpretation and final review decisions human-owned.
+This repository was built with coding-agent assistance. GitHub Copilot and Codex/ChatGPT were used for implementation, follow-up review, documentation edits, and local debugging.
 
-## Agent-Assisted Areas
+## Agent-Assisted Code
 
-- Repository structure: GitHub Copilot Chat helped organize the project as a small monorepo with `apps/api`, `apps/web`, `docs`, and `storage`.
-- Backend implementation: GitHub Copilot Chat assisted with the FastAPI app setup, lead routes, SQLAlchemy model, Pydantic schemas, SQLite configuration, bearer-token auth, resume upload storage, local console email service, authenticated resume downloads, and lead deletion workflow.
-- Frontend implementation: GitHub Copilot Chat assisted with the Next.js public intake form, internal dashboard, API client, status badges, token entry flow, lead status update interaction, resume download action, delete action, and Google OAuth sign-in flow.
-- Styling and UX copy: GitHub Copilot Chat assisted with the visual styling, layout, form states, dashboard states, and user-facing copy.
-- Tests: GitHub Copilot Chat assisted with pytest coverage for lead creation, upload validation, auth enforcement, authenticated listing, Google ID token authorization behavior, marking a lead as reached out, authenticated resume downloads, and deleting leads.
-- Documentation: GitHub Copilot Chat and Codex/ChatGPT assisted with the root README, API README, frontend README, design document, and this attribution note.
+- `apps/api`: FastAPI app structure, lead routes, SQLAlchemy model, Pydantic schemas, SQLite setup, auth dependencies, resume storage, console email service, and backend tests were agent-assisted and human-reviewed.
+- `apps/web`: Next.js page structure, API client, public intake form, admin dashboard, Google OAuth flow, local auth fallback, lead actions, and styling were agent-assisted and human-reviewed.
+- `docs` and `README.md`: setup instructions, design documentation, and attribution notes were drafted or revised with agent assistance and human review.
 
-## Human-Written / Human-Directed Areas
+## Human-Owned Work
 
-- I interpreted the assignment requirements and chose the core workflow: a public lead intake form, an authenticated internal dashboard, and a manual `PENDING` to `REACHED_OUT` status transition.
-- I made the product decision that automatic confirmation or notification emails should not count as outreach. The status changes only after a user explicitly marks the lead reached out.
-- I reviewed the generated implementation, ran the app locally, exercised the API, and decided which tradeoffs were acceptable for a take-home project.
-- I selected local-first implementations for SQLite, filesystem resume storage, console email, Google OAuth, and a bearer-token fallback so reviewers can run the app without paid external services.
-
-## Agent Output I Corrected
-
-One subtle issue I watched for was the difference between an automatic email notification and actual manual outreach. The coding agent initially leaned toward treating lead creation and notification as the main workflow completion point. I clarified that the lead should remain `PENDING` after submission and that only an internal user action should transition it to `REACHED_OUT`. I verified this in the backend status endpoint, the dashboard button behavior, and the tests that assert new leads start as `PENDING` before being manually updated.
-
-I also kept OAuth credentials out of tracked files. The Google client ID and client secret belong in local env files only, while the repository documents how a reviewer can create or supply their own OAuth client.
-
-## Prompt / Session Log Summary
-
-Representative agent prompts included:
-
-- Ask GitHub Copilot Chat to scaffold a FastAPI backend for lead creation, retrieval, and status update.
-- Ask GitHub Copilot Chat to add resume upload validation and local file storage.
-- Ask GitHub Copilot Chat to create local console email notifications without requiring third-party credentials.
-- Ask GitHub Copilot Chat to build a Next.js intake page and authenticated admin dashboard.
-- Ask GitHub Copilot Chat to add authenticated resume downloads and a lead deletion action.
-- Ask GitHub Copilot Chat to add Google OAuth for internal dashboard access while preserving a local token fallback.
-- Ask GitHub Copilot Chat to add tests for the core workflow and document setup steps.
-- Ask Codex/ChatGPT to review and refine the AI usage notes so the attribution accurately distinguishes Copilot from Codex/ChatGPT.
+- Product scope, requirements interpretation, and final workflow decisions were human-directed.
+- Final code review, manual testing, and acceptance decisions were human-owned.
+- Sensitive configuration values, such as OAuth credentials and local env files, are intentionally excluded from tracked files.
