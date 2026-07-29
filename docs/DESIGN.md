@@ -34,7 +34,7 @@ Next.js frontend
 FastAPI backend
   ├─ request validation
   ├─ lead APIs
-  ├─ bearer-token internal auth
+  ├─ Google ID token and local bearer-token internal auth
   ├─ SQLite persistence
   ├─ local resume storage
   └─ console email provider
@@ -156,18 +156,38 @@ Production changes:
 
 ## Auth Design
 
-The public lead submission endpoint is intentionally unauthenticated. Internal lead review, status update, and resume download endpoints require:
+The public lead submission endpoint is intentionally unauthenticated. Internal lead review, status update, resume download, and delete endpoints require an `Authorization: Bearer <token>` header.
+
+The primary internal dashboard flow uses Google OAuth through NextAuth/Auth.js on the frontend. After a successful Google sign-in, the frontend stores the Google ID token in the NextAuth JWT/session and passes that ID token to the FastAPI backend when calling internal APIs.
+
+The backend verifies Google ID tokens with `google-auth`:
+
+- token signature and issuer are validated by Google's verifier
+- token audience must match `GOOGLE_CLIENT_ID`
+- `email_verified` must be true
+- the email must be listed in `INTERNAL_ALLOWED_EMAILS` or match `INTERNAL_ALLOWED_EMAIL_DOMAIN`
+
+Missing or invalid bearer credentials return `401`. A valid Google identity that is not on the internal allowlist returns `403`.
+
+Local Google OAuth configuration is intentionally env-driven:
+
+- `apps/web/.env.local` holds `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `NEXT_PUBLIC_API_BASE_URL`.
+- `apps/api/.env` holds the matching `GOOGLE_CLIENT_ID` plus `INTERNAL_ALLOWED_EMAILS` or `INTERNAL_ALLOWED_EMAIL_DOMAIN`.
+- The Google OAuth client must allow `http://localhost:3000` as a JavaScript origin and `http://localhost:3000/api/auth/callback/google` as a redirect URI.
+- Real OAuth credentials are not tracked in Git; reviewers should create their own client or receive credentials out-of-band.
+
+The existing static internal token remains available as a local fallback:
 
 ```text
 Authorization: Bearer <INTERNAL_AUTH_TOKEN>
 ```
 
-This bearer-token approach is intentionally simple. It satisfies the requirement that the internal UI be guarded by auth while keeping local setup easy for reviewers.
+This fallback keeps the take-home easy to review without forcing each reviewer to configure Google OAuth credentials. The public lead submission endpoint does not use either internal auth mechanism.
 
 Production changes:
 
-- Use SSO/OIDC through a provider such as Auth0, Clerk, WorkOS, Google Workspace, or Microsoft Entra ID.
-- Add roles/permissions for internal users.
+- Use organization-managed SSO/OIDC through a provider such as Auth0, Clerk, WorkOS, Google Workspace, or Microsoft Entra ID.
+- Use organization allowlists, groups, or role claims instead of hand-maintained env-var email lists.
 - Prefer secure cookies or short-lived tokens depending on deployment model.
 
 ## Frontend Design
@@ -188,7 +208,9 @@ Public form decisions:
 
 Internal dashboard decisions:
 
-- The dashboard stores a local token in `localStorage` for the take-home.
+- Google OAuth is the primary dashboard sign-in flow when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured.
+- If Google OAuth is not configured, the dashboard exposes a small local token fallback and stores that fallback token in `localStorage` for the take-home.
+- The frontend exposes `/api/auth/google-enabled` so the admin page can decide whether to show Google sign-in or the local fallback.
 - Leads are shown with counts for total, pending, and reached out.
 - `PENDING` and `REACHED_OUT` are displayed as badges.
 - The action button says `Mark reached out` to distinguish manual attorney outreach from automatic submission emails.
@@ -202,12 +224,13 @@ Validation is split by responsibility:
 - Pydantic validates first name, last name, email, and status update payloads.
 - FastAPI validates required form/file fields.
 - The resume storage service validates file type, filename, and file size.
-- Internal routes validate bearer-token auth.
+- Internal routes validate either a verified Google ID token or the local bearer-token fallback.
 
 Expected error responses:
 
 - `400`: unsupported resume type or invalid upload
 - `401`: missing or invalid internal auth
+- `403`: valid Google identity that is not allowed for internal access
 - `404`: lead not found
 - `422`: invalid request data, such as malformed email or unsupported status
 
@@ -218,7 +241,11 @@ The backend includes focused pytest coverage for the core workflow:
 - public lead creation with PDF upload returns `PENDING`
 - invalid resume content type is rejected
 - internal lead list requires auth
+- internal lead list rejects invalid bearer tokens
 - internal lead list succeeds with auth
+- internal lead list accepts a verified and allowed Google identity
+- internal lead list rejects invalid Google ID tokens
+- internal lead list rejects a verified but unallowed Google identity
 - internal status update changes `PENDING` to `REACHED_OUT` and sets `reached_out_at`
 - internal lead delete requires auth, removes the database row and resume file, and returns `404` for missing leads
 
@@ -231,7 +258,7 @@ Intentional tradeoffs for the take-home:
 - SQLite instead of Postgres
 - local filesystem storage instead of object storage
 - console email instead of real email delivery
-- bearer-token internal auth instead of SSO/OIDC
+- env-var email/domain allowlists instead of organization groups or roles
 - no pagination/filtering on the internal lead list
 - no advanced resume preview, virus scanning, or object-storage-backed download flow
 - no Alembic migrations

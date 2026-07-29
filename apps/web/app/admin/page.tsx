@@ -177,15 +177,15 @@ export default function AdminPage() {
                 </div>
               </details>
             ) : null}
-            {error ? <div className="error-box" style={{ marginTop: '0.9rem' }}>{error}</div> : null}
+            {error ? <div className="error-box dashboard-error">{error}</div> : null}
           </section>
         ) : (
           <>
             <section className="panel admin-card">
-              <div className="token-box" style={{ justifyContent: 'space-between' }}>
+              <div className="dashboard-header">
                 <div>
-                  <h1 style={{ margin: 0 }}>Lead dashboard</h1>
-                  <p className="inline-caption" style={{ marginTop: '0.25rem' }}>
+                  <h1 className="dashboard-title">Lead dashboard</h1>
+                  <p className="inline-caption dashboard-subtitle">
                     {signedInEmail ? `Signed in as ${signedInEmail}` : 'Using local token fallback'}
                   </p>
                 </div>
@@ -209,7 +209,7 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {error ? <div className="error-box" style={{ marginTop: '0.9rem' }}>{error}</div> : null}
+              {error ? <div className="error-box dashboard-error">{error}</div> : null}
             </section>
 
             <section className="panel admin-card">
@@ -228,7 +228,7 @@ export default function AdminPage() {
                         <th>Status</th>
                         <th>Submitted</th>
                         <th>Reached out</th>
-                        <th>Action</th>
+                        <th className="row-delete-heading" aria-label="Delete lead" />
                       </tr>
                     </thead>
                     <tbody>
@@ -237,32 +237,46 @@ export default function AdminPage() {
                           <td>{`${lead.first_name} ${lead.last_name}`}</td>
                           <td>{lead.email}</td>
                           <td>
-                            <button className="ghost-button" onClick={() => handleDownloadResume(lead)}>
+                            <button className="resume-link" onClick={() => handleDownloadResume(lead)}>
                               {lead.resume_original_filename}
                             </button>
                           </td>
                           <td>
-                            <span className={`badge ${lead.status === 'PENDING' ? 'badge-pending' : 'badge-reached'}`}>
-                              {lead.status === 'PENDING' ? 'PENDING' : 'REACHED OUT'}
-                            </span>
+                            {lead.status === 'PENDING' ? (
+                              <button
+                                type="button"
+                                className="status-button status-button-pending"
+                                onClick={() => handleMarkReachedOut(lead.id)}
+                                aria-label={`Mark ${lead.first_name} ${lead.last_name} as reached out`}
+                                title="Mark this lead as reached out"
+                              >
+                                PENDING
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="status-button status-button-reached"
+                                disabled
+                                title="Already reached out"
+                              >
+                                REACHED OUT
+                              </button>
+                            )}
                           </td>
                           <td>{new Date(lead.created_at).toLocaleDateString()}</td>
                           <td>{lead.reached_out_at ? new Date(lead.reached_out_at).toLocaleDateString() : '—'}</td>
                           <td>
-                            <div className="token-box" style={{ gap: '0.5rem', justifyContent: 'flex-start' }}>
-                              {lead.status === 'PENDING' ? (
-                                <button className="secondary-button" onClick={() => handleMarkReachedOut(lead.id)}>
-                                  Mark reached out
-                                </button>
-                              ) : (
-                                <button className="ghost-button" disabled>
-                                  Reached out
-                                </button>
-                              )}
-                              <button className="ghost-button" onClick={() => handleDeleteLead(lead)}>
-                                Delete
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              className="icon-button danger-button"
+                              onClick={() => handleDeleteLead(lead)}
+                              aria-label={`Delete ${lead.first_name} ${lead.last_name}`}
+                              title={`Delete ${lead.first_name} ${lead.last_name}`}
+                            >
+                              <svg aria-hidden="true" viewBox="0 0 24 24" className="icon">
+                                <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 9h10l-1 12H8L7 9Z" />
+                              </svg>
+                            </button>
                           </td>
                         </tr>
                       ))}

@@ -34,7 +34,7 @@ export default function HomePage() {
       }
 
       await createLead(formData);
-      setSuccess('Your lead was submitted successfully. Alma’s team will review it shortly.');
+      setSuccess('Your information was submitted successfully. Alma’s team will review it shortly.');
       setFirstName('');
       setLastName('');
       setEmail('');
@@ -50,86 +50,109 @@ export default function HomePage() {
   return (
     <div className="page-shell">
       <header className="topbar">
-        <div className="brand">Alma</div>
+        <div className="brand">alma</div>
         <div className="topbar-actions">
           <a href="/admin" className="link-button">
-            Internal Dashboard
+            Internal dashboard
           </a>
         </div>
       </header>
 
-      <main className="hero-grid">
-        <section className="panel intro-panel">
-          <h1>Submit your profile</h1>
-          <p>
-            Share your information and resume so Alma’s team can review your case.
-          </p>
-          <p className="inline-caption">
-            We will keep your submission simple and secure. New leads arrive as PENDING until an internal team member marks them reached out.
-          </p>
-        </section>
-
-        <section className="panel form-panel">
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <div className="field">
-              <label htmlFor="first_name">First name</label>
-              <input
-                id="first_name"
-                name="first_name"
-                type="text"
-                required
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
-              />
+      <main className="intake-stage">
+        <div className="intake-grid">
+          <section className="intro-panel">
+            <div className="eyebrow">
+              <span className="eyebrow-dot" aria-hidden="true" />
+              GET STARTED
             </div>
+            <h1>Submit your profile</h1>
+            <p className="testimonial">Share your information and resume so Alma’s team can review your submission.</p>
+          </section>
 
-            <div className="field">
-              <label htmlFor="last_name">Last name</label>
-              <input
-                id="last_name"
-                name="last_name"
-                type="text"
-                required
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
-              />
+          <section className="form-panel" aria-label="Consultation request form">
+            <div className="form-card">
+              <div className="form-intro">
+                <h2>Just provide a few details, and we'll get you started.</h2>
+                <p>Required fields*</p>
+              </div>
+
+              <form className="form-grid" onSubmit={handleSubmit}>
+                <div className="name-fields">
+                  <div className="field">
+                    <label className="sr-only" htmlFor="first_name">
+                      First name
+                    </label>
+                    <input
+                      id="first_name"
+                      name="first_name"
+                      type="text"
+                      placeholder="First name*"
+                      required
+                      value={firstName}
+                      onChange={(event) => setFirstName(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="sr-only" htmlFor="last_name">
+                      Last name
+                    </label>
+                    <input
+                      id="last_name"
+                      name="last_name"
+                      type="text"
+                      placeholder="Last name*"
+                      required
+                      value={lastName}
+                      onChange={(event) => setLastName(event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="sr-only" htmlFor="email">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="Email*"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="sr-only" htmlFor="resume">
+                    Resume or CV
+                  </label>
+                  <label className="upload-control" htmlFor="resume">
+                    <span>{resume ? resume.name : 'Upload resume or CV'}</span>
+                    <span className="upload-helper">Max file size 10MB.</span>
+                  </label>
+                  <input
+                    className="sr-only"
+                    id="resume"
+                    name="resume"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    required
+                    onChange={handleFileChange}
+                  />
+                </div>
+
+                {error ? <div className="error-box">{error}</div> : null}
+                {success ? <div className="success-box">{success}</div> : null}
+
+                <button className="primary-button intake-submit" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Submitting…' : 'Submit'}
+                </button>
+              </form>
             </div>
-
-            <div className="field">
-              <label htmlFor="email">Email</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="resume">Resume / CV</label>
-              <input
-                id="resume"
-                name="resume"
-                type="file"
-                accept=".pdf,.doc,.docx"
-                required
-                onChange={handleFileChange}
-              />
-              <span className="inline-caption">
-                {resume ? `Selected file: ${resume.name}` : 'Accepted formats: PDF, DOC, DOCX'}
-              </span>
-            </div>
-
-            {error ? <div className="error-box">{error}</div> : null}
-            {success ? <div className="success-box">{success}</div> : null}
-
-            <button className="primary-button" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting…' : 'Submit profile'}
-            </button>
-          </form>
-        </section>
+          </section>
+        </div>
       </main>
     </div>
   );
