@@ -152,10 +152,6 @@ Expected result:
 
 See `docs/DESIGN.md`.
 
-## Coding Agent Usage
-
-See `docs/AGENT_USAGE.md`.
-
 ## Local Development Notes
 
 - SQLite database files are ignored by Git.
