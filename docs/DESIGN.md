@@ -114,7 +114,7 @@ The status update schema requires clients to explicitly send a status field. Emp
 
 ## Persistence and File Storage
 
-SQLite is used for local persistence because it is durable, simple to run, and requires no external service. This is appropriate for a six-hour take-home and makes local review straightforward.
+SQLite is used for local persistence because it is durable, simple to run, and requires no external service. This is makes local review straightforward and is a practical choice given the assignment's timeframe.
 
 Resume/CV files are stored on the local filesystem under the configured `RESUME_STORAGE_DIR`. The storage service:
 
