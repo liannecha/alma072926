@@ -31,6 +31,12 @@ Local email delivery uses the console provider. Messages are printed to the term
 
 Real email delivery is intentionally deferred as an optional enhancement. The provider abstraction allows a production service like Resend, SendGrid, or SES to be added later through environment configuration without changing lead submission logic.
 
+## Internal auth
+
+Internal endpoints will require an Authorization header in the form `Bearer <INTERNAL_AUTH_TOKEN>`. The public lead submission endpoint remains open and does not require authentication.
+
+Real authentication is intentionally deferred as an optional enhancement. The bearer-token dependency keeps local setup simple for reviewers, while a production application would use SSO/OAuth/OIDC through a provider such as Auth0, Clerk, WorkOS, Google Workspace, or Microsoft Entra ID.
+
 ## Health check
 
 Once running, visit:
