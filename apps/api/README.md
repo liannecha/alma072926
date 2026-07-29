@@ -17,6 +17,10 @@ This directory contains the initial FastAPI backend for the Alma lead intake tak
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
+## Database
+
+The backend uses SQLite locally by default. The connection string can be changed in the .env file via DATABASE_URL if you want to point at a different database later.
+
 ## Health check
 
 Once running, visit:
