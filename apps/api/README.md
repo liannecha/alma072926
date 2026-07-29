@@ -25,6 +25,12 @@ The backend uses SQLite locally by default. The connection string can be changed
 
 Resume uploads are stored locally under RESUME_STORAGE_DIR during development. The service validates allowed content types and file size before saving files to disk.
 
+## Email
+
+Local email delivery uses the console provider. Messages are printed to the terminal so the backend can be exercised locally without configuring a real mail provider.
+
+Real email delivery is intentionally deferred as an optional enhancement. The provider abstraction allows a production service like Resend, SendGrid, or SES to be added later through environment configuration without changing lead submission logic.
+
 ## Health check
 
 Once running, visit:
