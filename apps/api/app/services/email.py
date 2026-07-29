@@ -85,8 +85,9 @@ class ConsoleEmailService:
                 to=email,
                 subject="Alma follow-up",
                 body=(
-                    f"Hi {first_name}, thank you for submitting your information. "
-                    "Alma will follow up with you shortly."
+                    f"Hi {first_name},\n\n"
+                    "An Alma team member has reviewed your information. "
+                    "Thank you for submitting your profile. Alma will follow up with you shortly."
                 ),
             )
         )

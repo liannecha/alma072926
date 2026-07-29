@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.core import config as config_module
-from app.services.email import EmailMessage, ResendEmailService, SmtpEmailService, get_email_service
+from app.services.email import ConsoleEmailService, EmailMessage, ResendEmailService, SmtpEmailService, get_email_service
 
 
 class FakeResponse:
@@ -34,6 +34,17 @@ def test_get_email_service_returns_smtp_provider() -> None:
         assert isinstance(service, SmtpEmailService)
     finally:
         config_module.settings.email_provider = original_provider
+
+
+def test_follow_up_email_mentions_alma_review(monkeypatch) -> None:
+    messages: list[EmailMessage] = []
+    monkeypatch.setattr(ConsoleEmailService, "send", lambda _self, message: messages.append(message))
+
+    ConsoleEmailService().send_follow_up(first_name="Ada", email="ada@example.com")
+
+    assert len(messages) == 1
+    assert messages[0].to == "ada@example.com"
+    assert "An Alma team member has reviewed your information." in messages[0].body
 
 
 def test_resend_provider_posts_email_payload(monkeypatch) -> None:

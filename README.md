@@ -141,7 +141,7 @@ The backend verifies the token signature and audience, requires `email_verified=
 3. Open `http://localhost:3000`.
 4. Submit first name, last name, email, and a PDF/DOC/DOCX resume.
 5. Confirm a success message appears.
-6. Confirm the backend terminal prints a confirmation email to the prospect and a notification email to `lianne.cha@gmail.com`.
+6. Confirm the app sends or prints a confirmation email to the prospect and a notification email to `lianne.cha@gmail.com`, depending on the configured email provider.
 7. Open `http://localhost:3000/admin`.
 8. Sign in with one of the verified Google accounts.
 9. Confirm the lead appears as `PENDING`.
@@ -164,7 +164,7 @@ pytest
 Expected result:
 
 ```text
-21 passed
+22 passed
 ```
 
 ## Design Notes
@@ -178,10 +178,10 @@ For Alma-inspired visual direction, see `docs/ALMA_STYLE_GUIDE.md`.
 - SQLite database files are ignored by Git.
 - Uploaded resumes are stored locally and ignored by Git.
 - OAuth credentials live only in local `.env` files and should be shared out-of-band if a reviewer needs the exact same Google client.
-- Email delivery defaults to a console provider for local development.
+- Email delivery defaults to a console provider for local development, with Gmail SMTP and Resend available through environment configuration.
 - Lead creation emails the prospect and the configurable internal recipient, which defaults to `lianne.cha@gmail.com`. The dashboard's `Send email` action sends a manual follow-up to the selected lead.
 - Configure `INTERNAL_NOTIFICATION_EMAIL` in `apps/api/.env` to change the attorney recipient. Keep provider credentials in local environment variables; the default console provider requires none.
-- Production would use Postgres, object storage, real email delivery, and organization-managed SSO/groups/roles.
+- Production would use Postgres, object storage, queued email delivery, and organization-managed SSO/groups/roles.
 
 ## Real Email Delivery
 

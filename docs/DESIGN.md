@@ -38,7 +38,7 @@ FastAPI backend
   ├─ Google ID token internal auth
   ├─ SQLite persistence
   ├─ local resume storage
-  └─ email provider abstraction with console and Resend providers
+  └─ email provider abstraction with console, SMTP, and Resend providers
 ```
 
 The repository is organized as a small monorepo:

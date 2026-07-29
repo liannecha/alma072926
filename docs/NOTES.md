@@ -4,7 +4,7 @@ This repository was built with coding-agent assistance. GitHub Copilot and Codex
 
 ## Agent-Assisted Code
 
-- `apps/api`: FastAPI app structure, lead routes, SQLAlchemy model, Pydantic schemas, SQLite setup, auth dependencies, resume storage, console email service, and backend tests were agent-assisted and human-reviewed.
+- `apps/api`: FastAPI app structure, lead routes, SQLAlchemy model, Pydantic schemas, SQLite setup, auth dependencies, resume storage, email providers, and backend tests were agent-assisted and human-reviewed.
 - `apps/web`: Next.js page structure, API client, public intake form, admin dashboard, Google OAuth flow, lead actions, and styling were agent-assisted and human-reviewed.
 - `docs` and `README.md`: setup instructions, design documentation, and attribution notes were drafted or revised with agent assistance and human review.
 
