@@ -21,6 +21,10 @@ This directory contains the initial FastAPI backend for the Alma lead intake tak
 
 The backend uses SQLite locally by default. The connection string can be changed in the .env file via DATABASE_URL if you want to point at a different database later.
 
+## Resume storage
+
+Resume uploads are stored locally under RESUME_STORAGE_DIR during development. The service validates allowed content types and file size before saving files to disk.
+
 ## Health check
 
 Once running, visit:
