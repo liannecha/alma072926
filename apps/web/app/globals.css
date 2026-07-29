@@ -290,6 +290,20 @@ select {
   min-width: min(320px, 100%);
 }
 
+.fallback-auth {
+  margin-top: 1rem;
+}
+
+.fallback-auth summary {
+  cursor: pointer;
+  color: var(--green-900);
+  font-weight: 700;
+}
+
+.fallback-auth .token-box {
+  margin-top: 0.75rem;
+}
+
 @media (max-width: 850px) {
   .hero-grid {
     grid-template-columns: 1fr;

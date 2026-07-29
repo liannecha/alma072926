@@ -1,27 +1,24 @@
 'use client';
 
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { useEffect, useMemo, useState } from 'react';
 import { Lead, deleteLead, downloadLeadResume, listLeads, markLeadReachedOut } from '../../lib/api';
 
 const STORAGE_KEY = 'alma-internal-token';
 
 export default function AdminPage() {
-  const [token, setToken] = useState('');
-  const [savedToken, setSavedToken] = useState('');
+  const { data: session, status } = useSession();
+  const [fallbackToken, setFallbackToken] = useState('');
+  const [savedFallbackToken, setSavedFallbackToken] = useState('');
+  const [googleAuthEnabled, setGoogleAuthEnabled] = useState<boolean | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const storedToken = window.localStorage.getItem(STORAGE_KEY) || '';
-    setSavedToken(storedToken);
-    setToken(storedToken);
-    if (storedToken) {
-      void loadLeads(storedToken);
-    }
-  }, []);
-
-  const isAuthenticated = Boolean(savedToken);
+  const googleToken = session?.googleIdToken || '';
+  const activeToken = googleToken || savedFallbackToken;
+  const isAuthenticated = Boolean(activeToken);
+  const signedInEmail = session?.user?.email || '';
 
   const loadLeads = async (activeToken: string) => {
     setLoading(true);
@@ -37,33 +34,59 @@ export default function AdminPage() {
     }
   };
 
-  const handleContinue = async () => {
-    const activeToken = token.trim();
-    if (!activeToken) {
+  useEffect(() => {
+    const storedToken = window.localStorage.getItem(STORAGE_KEY) || '';
+    setSavedFallbackToken(storedToken);
+    setFallbackToken(storedToken);
+  }, []);
+
+  useEffect(() => {
+    const loadAuthConfig = async () => {
+      const response = await fetch('/api/auth/google-enabled');
+      const payload = (await response.json()) as { enabled?: boolean };
+      setGoogleAuthEnabled(Boolean(payload.enabled));
+    };
+
+    void loadAuthConfig().catch(() => setGoogleAuthEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    if (activeToken) {
+      void loadLeads(activeToken);
+    } else {
+      setLeads([]);
+    }
+  }, [activeToken]);
+
+  const handleFallbackContinue = async () => {
+    const trimmedToken = fallbackToken.trim();
+    if (!trimmedToken) {
       setError('Enter your internal token');
       return;
     }
 
-    window.localStorage.setItem(STORAGE_KEY, activeToken);
-    setSavedToken(activeToken);
-    await loadLeads(activeToken);
+    window.localStorage.setItem(STORAGE_KEY, trimmedToken);
+    setSavedFallbackToken(trimmedToken);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     window.localStorage.removeItem(STORAGE_KEY);
-    setSavedToken('');
-    setToken('');
+    setSavedFallbackToken('');
+    setFallbackToken('');
     setLeads([]);
     setError(null);
+    if (status === 'authenticated') {
+      await signOut({ callbackUrl: '/admin' });
+    }
   };
 
   const handleMarkReachedOut = async (leadId: number) => {
-    if (!savedToken) {
+    if (!activeToken) {
       return;
     }
 
     try {
-      const updatedLead = await markLeadReachedOut(leadId, savedToken);
+      const updatedLead = await markLeadReachedOut(leadId, activeToken);
       setLeads((current) => current.map((lead) => (lead.id === leadId ? updatedLead : lead)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update lead');
@@ -71,19 +94,19 @@ export default function AdminPage() {
   };
 
   const handleDownloadResume = async (lead: Lead) => {
-    if (!savedToken) {
+    if (!activeToken) {
       return;
     }
 
     try {
-      await downloadLeadResume(lead.id, savedToken, lead.resume_original_filename);
+      await downloadLeadResume(lead.id, activeToken, lead.resume_original_filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to download resume');
     }
   };
 
   const handleDeleteLead = async (lead: Lead) => {
-    if (!savedToken) {
+    if (!activeToken) {
       return;
     }
 
@@ -93,7 +116,7 @@ export default function AdminPage() {
     }
 
     try {
-      await deleteLead(lead.id, savedToken);
+      await deleteLead(lead.id, activeToken);
       setLeads((current) => current.filter((item) => item.id !== lead.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete lead');
@@ -126,18 +149,34 @@ export default function AdminPage() {
         {!isAuthenticated ? (
           <section className="panel admin-card">
             <h1>Internal access</h1>
-            <p className="inline-caption">Enter the internal token to review leads. Local default: change-me.</p>
-            <div className="token-box">
-              <input
-                type="password"
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder="Internal token"
-              />
-              <button className="primary-button" onClick={handleContinue}>
-                Continue
-              </button>
-            </div>
+            {status === 'loading' || googleAuthEnabled === null ? (
+              <p className="inline-caption">Checking internal access…</p>
+            ) : null}
+            {googleAuthEnabled ? (
+              <>
+                <p className="inline-caption">Sign in with your approved Google account to review leads.</p>
+                <button className="primary-button" onClick={() => void signIn('google')}>
+                  Sign in with Google
+                </button>
+              </>
+            ) : null}
+            {googleAuthEnabled === false ? (
+              <details className="fallback-auth" open>
+                <summary>Use local token fallback</summary>
+                <p className="inline-caption">Google OAuth is not configured locally. Reviewer default: change-me.</p>
+                <div className="token-box">
+                  <input
+                    type="password"
+                    value={fallbackToken}
+                    onChange={(event) => setFallbackToken(event.target.value)}
+                    placeholder="Internal token"
+                  />
+                  <button className="primary-button" onClick={handleFallbackContinue}>
+                    Continue
+                  </button>
+                </div>
+              </details>
+            ) : null}
             {error ? <div className="error-box" style={{ marginTop: '0.9rem' }}>{error}</div> : null}
           </section>
         ) : (
@@ -147,11 +186,11 @@ export default function AdminPage() {
                 <div>
                   <h1 style={{ margin: 0 }}>Lead dashboard</h1>
                   <p className="inline-caption" style={{ marginTop: '0.25rem' }}>
-                    Review incoming leads and mark when the team has reached out.
+                    {signedInEmail ? `Signed in as ${signedInEmail}` : 'Using local token fallback'}
                   </p>
                 </div>
                 <button className="secondary-button" onClick={handleSignOut}>
-                  Clear token
+                  Sign out
                 </button>
               </div>
 
