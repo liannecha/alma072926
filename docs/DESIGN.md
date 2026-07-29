@@ -19,6 +19,7 @@ The prompt asks for an application that can create, get, and update leads. In th
 - `POST /api/leads` creates a public lead submission.
 - `GET /api/leads` returns submitted leads for authenticated internal users.
 - `PATCH /api/leads/{lead_id}/status` updates a lead status for authenticated internal users.
+- `GET /api/leads/{lead_id}/resume` downloads a lead's stored resume for authenticated internal users.
 
 The required lead fields are first name, last name, email, and resume/CV. Each lead also has a status that starts as `PENDING` and can transition to `REACHED_OUT` only through a manual internal action.
 
@@ -150,7 +151,7 @@ Production changes:
 
 ## Auth Design
 
-The public lead submission endpoint is intentionally unauthenticated. Internal lead review and status update endpoints require:
+The public lead submission endpoint is intentionally unauthenticated. Internal lead review, status update, and resume download endpoints require:
 
 ```text
 Authorization: Bearer <INTERNAL_AUTH_TOKEN>
@@ -186,6 +187,7 @@ Internal dashboard decisions:
 - Leads are shown with counts for total, pending, and reached out.
 - `PENDING` and `REACHED_OUT` are displayed as badges.
 - The action button says `Mark reached out` to distinguish manual attorney outreach from automatic submission emails.
+- Resume filenames in the dashboard are clickable and trigger an authenticated download for the internal user.
 
 ## Validation and Error Handling
 

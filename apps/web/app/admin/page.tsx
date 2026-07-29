@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Lead, listLeads, markLeadReachedOut } from '../../lib/api';
+import { Lead, downloadLeadResume, listLeads, markLeadReachedOut } from '../../lib/api';
 
 const STORAGE_KEY = 'alma-internal-token';
 
@@ -67,6 +67,18 @@ export default function AdminPage() {
       setLeads((current) => current.map((lead) => (lead.id === leadId ? updatedLead : lead)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update lead');
+    }
+  };
+
+  const handleDownloadResume = async (lead: Lead) => {
+    if (!savedToken) {
+      return;
+    }
+
+    try {
+      await downloadLeadResume(lead.id, savedToken, lead.resume_original_filename);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to download resume');
     }
   };
 
@@ -167,7 +179,11 @@ export default function AdminPage() {
                         <tr key={lead.id}>
                           <td>{`${lead.first_name} ${lead.last_name}`}</td>
                           <td>{lead.email}</td>
-                          <td>{lead.resume_original_filename}</td>
+                          <td>
+                            <button className="ghost-button" onClick={() => handleDownloadResume(lead)}>
+                              {lead.resume_original_filename}
+                            </button>
+                          </td>
                           <td>
                             <span className={`badge ${lead.status === 'PENDING' ? 'badge-pending' : 'badge-reached'}`}>
                               {lead.status === 'PENDING' ? 'PENDING' : 'REACHED OUT'}

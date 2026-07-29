@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,31 @@ def list_leads(
 ) -> list[Lead]:
     leads = db.query(Lead).order_by(Lead.created_at.desc()).all()
     return leads
+
+
+@router.get("/leads/{lead_id}/resume")
+def download_lead_resume(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_internal_auth),
+) -> FileResponse:
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if not lead.resume_storage_path:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    stored_path = Path(lead.resume_storage_path)
+    file_path = stored_path if stored_path.is_absolute() else (Path.cwd() / stored_path).resolve()
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    return FileResponse(
+        path=file_path,
+        media_type=lead.resume_content_type,
+        filename=lead.resume_original_filename,
+    )
 
 
 @router.patch("/leads/{lead_id}/status", response_model=LeadRead)

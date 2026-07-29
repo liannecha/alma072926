@@ -67,3 +67,25 @@ export async function markLeadReachedOut(id: number, token: string) {
 
   return response.json() as Promise<Lead>;
 }
+
+export async function downloadLeadResume(id: number, token: string, filename: string) {
+  const response = await fetch(`${API_BASE_URL}/api/leads/${id}/resume`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Unable to download resume'));
+  }
+
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = downloadUrl;
+  anchor.download = filename || `lead-${id}-resume`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+}

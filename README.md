@@ -10,6 +10,7 @@ A small full-stack lead intake application for the Alma take-home assignment.
 - Console email notifications to the prospect and internal team
 - Internal authenticated dashboard
 - Manual lead status transition from `PENDING` to `REACHED_OUT`
+- Authenticated resume download for internal users
 
 ## Tech Stack
 
@@ -131,6 +132,7 @@ Authorization: Bearer change-me
 9. Confirm the lead appears as `PENDING`.
 10. Click `Mark reached out`.
 11. Confirm the lead changes to `REACHED_OUT`.
+12. In the admin dashboard, click the resume filename to download the uploaded resume.
 
 ## Tests
 
