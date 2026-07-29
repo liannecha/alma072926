@@ -5,3 +5,4 @@ __pycache__/
 alma_leads.db
 storage/resumes/*
 !storage/resumes/.gitkeep
+apps/api/storage/resumes/*
